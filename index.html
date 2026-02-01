@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>кликер sonal</title>
+  <style>
+    :root { --red: #ff0000; --gold: #ffcc00; --bg: #020202; --win: #0a0a0a; --border: #1a1a1a; }
+    * { box-sizing: border-box; cursor: crosshair; outline: none; }
+    body { margin: 0; height: 100vh; background: var(--bg); color: #fff; font-family: 'Consolas', monospace; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+    
+    /* Основной экран */
+    .main-screen { position: relative; z-index: 10; text-align: center; transition: filter 0.3s; }
+    .blur { filter: blur(10px) brightness(0.3); pointer-events: none; }
+    h1 { font-size: 80px; font-weight: 900; margin-bottom: 20px; font-style: italic; }
+    h1 span { color: var(--red); }
+    #crushBtn { padding: 30px 80px; font-size: 40px; font-weight: 900; background: linear-gradient(180deg, var(--red), #500); color: #fff; border: none; border-radius: 10px; box-shadow: 0 10px 0 #300, 0 20px 40px rgba(255,0,0,0.3); cursor: pointer; transition: 0.1s; }
+    #crushBtn:active { transform: translateY(8px); box-shadow: 0 2px 0 #300; }
+
+    /* Кнопка магазина */
+    .open-shop-btn { position: fixed; top: 20px; right: 20px; padding: 15px 25px; background: #111; border: 1px solid var(--border); color: var(--gold); font-weight: 900; cursor: pointer; z-index: 50; }
+    
+    /* Модальное окно */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 200; }
+    .modal-overlay.active { display: flex; }
+    .shop-window { width: 450px; background: var(--win); border: 2px solid var(--border); padding: 30px; position: relative; box-shadow: 0 0 50px rgba(0,0,0,1); }
+
+    /* Ошибка */
+    #shop-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; text-align: center; color: var(--red); font-weight: 900; font-size: 20px; text-shadow: 0 0 10px #000; pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 300; }
+    #shop-msg.show { opacity: 1; animation: shake-msg 0.3s infinite; }
+    @keyframes shake-msg { 0%, 100% {transform: translate(-50%, -50%);} 25% {transform: translate(-52%, -48%);} 75% {transform: translate(-48%, -52%);} }
+
+    .item-row { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #000; border: 1px solid #111; margin-bottom: 10px; }
+    .buy-btn { padding: 8px 15px; font-size: 11px; font-weight: 900; background: #222; color: #fff; border: none; cursor: pointer; }
+    .buy-btn.owned { background: #1a3a1a; color: #0f0; }
+    .buy-btn.active-snd { background: var(--gold); color: #000; }
+    .stats { position: fixed; top: 20px; left: 20px; z-index: 100; }
+    .balance-val { font-size: 32px; font-weight: 900; }
+  </style>
+</head>
+<body>
+
+<div class="stats">
+  <div style="color:#555; font-size:10px">БАЛАНС (БЕЗ СОХРАНЕНИЯ):</div>
+  <div class="balance-val" id="bal">0</div>
+</div>
+
+<button class="open-shop-btn" onclick="toggleShop(true)">МАРКЕТ</button>
+
+<div class="modal-overlay" id="modal">
+  <div class="shop-window">
+    <div id="shop-msg">НЕ ХВАТАЕТ БРО, ЗАРАБОТАЙ</div>
+    <div style="position:absolute; top:10px; right:15px; cursor:pointer; font-size:25px;" onclick="toggleShop(false)">×</div>
+    <div style="color:var(--red); font-weight:900; margin-bottom:20px;">СЕКТОР СНАРЯЖЕНИЯ</div>
+    <div id="shop-content"></div>
+  </div>
+</div>
+
+<div class="main-screen" id="main">
+  <h1>УД<span>АР</span></h1>
+  <button id="crushBtn">CRUSH</button>
+</div>
+
+<script>
+  const balEl = document.getElementById('bal'), main = document.getElementById('main'), modal = document.getElementById('modal');
+  const shopContent = document.getElementById('shop-content'), msg = document.getElementById('shop-msg'), btn = document.getElementById('crushBtn');
+
+  // Состояние обнуляется при перезагрузке
+  let state = {
+    balance: 0,
+    current: "sounds.mp3",
+    inv: ["sounds.mp3"]
+  };
+
+  const sounds = [
+    { id: "sounds.mp3", n: "УДАР", p: 0 },
+    { id: "sound2.mp3", n: "ГАРАЖ БАЛГАРКА", p: 2500 },
+    { id: "sound3.mp3", n: "МУСУЛЬМАНИН", p: 10000 },
+    { id: "sound4.mp3", n: "Я ЕГО ЩАС ОТХУЯРЮ", p: 35000 },
+    { id: "sound5.mp3", n: "С ПИСЮНОМ ПОИГРАЙ", p: 100000 }
+  ];
+
+  const pool = {};
+  sounds.forEach(s => {
+    pool[s.id] = Array.from({length: 4}, () => new Audio(s.id));
+  });
+
+  function play() {
+    const s = pool[state.current][Math.floor(Math.random()*4)];
+    s.currentTime = 0; s.play().catch(()=>{});
+  }
+
+  function toggleShop(open) {
+    if(open) { modal.classList.add('active'); main.classList.add('blur'); renderShop(); }
+    else { modal.classList.remove('active'); main.classList.remove('blur'); }
+  }
+
+  function showFail() {
+    msg.classList.add('show');
+    setTimeout(() => msg.classList.remove('show'), 1500);
+  }
+
+  function renderShop() {
+    shopContent.innerHTML = '';
+    sounds.forEach(s => {
+      const owned = state.inv.includes(s.id), active = state.current === s.id;
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      row.innerHTML = `<span>${s.n}</span><button class="buy-btn ${active?'active-snd':(owned?'owned':'')}" onclick="buy('${s.id}', ${s.p})">${active?'АКТИВ':(owned?'ВЫБРАТЬ':s.p)}</button>`;
+      shopContent.appendChild(row);
+    });
+    balEl.innerText = state.balance.toLocaleString();
+  }
+
+  window.buy = (id, p) => {
+    if(state.inv.includes(id)) state.current = id;
+    else if(state.balance >= p) { state.balance -= p; state.inv.push(id); state.current = id; }
+    else { showFail(); }
+    renderShop();
+  };
+
+  btn.onclick = () => { 
+    play(); 
+    state.balance += 250; 
+    renderShop(); 
+  };
+
+  renderShop();
+</script>
+</body>
+</html>
